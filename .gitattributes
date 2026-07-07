@@ -1,0 +1,11 @@
+* text=auto
+
+*.tcl text eol=lf
+*.md text eol=lf
+*.dat text eol=lf
+*.bat text eol=crlf
+*.xpr text eol=lf
+
+*.bit binary
+*.bin binary
+*.ltx binary
