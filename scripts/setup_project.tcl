@@ -32,6 +32,7 @@ foreach rel {
 
 set source_files {
     src/board/top.v
+    src/board/seg_display.v
     src/board/data_ram.v
     src/cpu/ctrl_encode_def.v
     src/cpu/alu.v
