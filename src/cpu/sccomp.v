@@ -18,6 +18,13 @@ module sccomp(clk, rstn, reg_sel, reg_data);
    SCPU U_SCPU(
          .clk(clk),                 // input:  cpu clock
          .reset(rst),                 // input:  reset
+         .software_irq(1'b0),
+         .timer_irq(1'b0),
+         .external_irq(1'b0),
+         .uart_irq(1'b0),
+         .gpio_irq(1'b0),
+         .spi_irq(1'b0),
+         .i2c_irq(1'b0),
          .inst_in(instr),             // input:  instruction
          .Data_in(dm_dout),        // input:  data to cpu  
          .mem_w(MemWrite),       // output: memory write signal
@@ -46,4 +53,3 @@ module sccomp(clk, rstn, reg_sel, reg_data);
    );
         
 endmodule
-

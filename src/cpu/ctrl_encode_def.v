@@ -26,6 +26,7 @@
 `define WDSel_FromALU 2'b00
 `define WDSel_FromMEM 2'b01
 `define WDSel_FromPC 2'b10
+`define WDSel_FromCSR 2'b11
 
 `define ALUOp_nop 5'b00000
 `define ALUOp_lui 5'b00001
@@ -51,4 +52,3 @@
 `define dm_halfword_unsigned 3'b010
 `define dm_byte 3'b011
 `define dm_byte_unsigned 3'b100
-

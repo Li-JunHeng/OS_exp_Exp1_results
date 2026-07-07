@@ -42,6 +42,19 @@ module top(
     wire        counter0_out;
     wire        counter1_out;
     wire        counter2_out;
+    wire        cpu_software_irq;
+    wire        cpu_timer_irq;
+    wire        cpu_uart_irq;
+    wire        cpu_gpio_irq;
+    wire        cpu_spi_irq;
+    wire        cpu_i2c_irq;
+
+    assign cpu_software_irq = sw_clean[14];
+    assign cpu_timer_irq = counter0_out;
+    assign cpu_uart_irq = sw_clean[13];
+    assign cpu_gpio_irq = sw_clean[15];
+    assign cpu_spi_irq = counter1_out;
+    assign cpu_i2c_irq = counter2_out;
 
     Enter U_ENTER(
         .clk(clk),
@@ -87,6 +100,13 @@ module top(
     SCPU U_SCPU(
         .clk(clk_cpu),
         .reset(rst),
+        .software_irq(cpu_software_irq),
+        .timer_irq(cpu_timer_irq),
+        .external_irq(1'b0),
+        .uart_irq(cpu_uart_irq),
+        .gpio_irq(cpu_gpio_irq),
+        .spi_irq(cpu_spi_irq),
+        .i2c_irq(cpu_i2c_irq),
         .inst_in(inst),
         .Data_in(cpu_data_in),
         .mem_w(mem_w),
