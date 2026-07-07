@@ -1,13 +1,1 @@
 .DS_Store
-
-# Vivado generated project state
-.Xil/
-*.cache/
-*.hw/
-*.ip_user_files/
-*.sim/
-*.runs/
-*.xpr
-*.jou
-*.log
-*.str
