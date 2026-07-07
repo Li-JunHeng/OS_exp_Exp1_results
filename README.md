@@ -1,10 +1,10 @@
 # Exp1 Results and Board Bring-Up
 
-This directory is a Git submodule mounted at `results/`. It contains the Vivado project shell, board bring-up scripts, copied memory initialization files, and experiment evidence.
+This repository is self-contained for board bring-up. It is also mounted as the parent CPU project's `results/` submodule, but it does not require the parent repository to configure Vivado, build a bitstream, or program the board.
 
 ## Quick Board Flow
 
-Run these from this `results/` directory on a machine with Vivado installed and available in `PATH`.
+Run these from this directory on a machine with Vivado installed and available in `PATH`.
 
 ```bat
 00_setup_project.bat
@@ -40,7 +40,17 @@ If you prefer Vivado GUI:
 
 ## Important Notes
 
-- The scripts add sources from the parent repository (`../src`, `../constraints`) and keep output artifacts in this `results/` submodule.
-- `scripts/setup_project.tcl` intentionally excludes `../src/ip/SCPU.v` and `../src/ip/SCPU.edf`, because those are the provided CPU black-box stubs and conflict with the implemented `../src/cpu/SCPU.v`.
+- The scripts add sources from this repository's local `src/` and `constraints/` directories; a parent repository checkout is not needed.
+- `scripts/setup_project.tcl` intentionally excludes the provided CPU black-box stub (`SCPU.v`/`SCPU.edf`) because it conflicts with the implemented `src/cpu/SCPU.v`.
 - `memory/Test_37_Instr8.dat` and `memory/D_mem.dat` are copied here so Vivado synthesis can resolve `$readmemh("memory/...")` from the project/run directory.
 - Generated `.bit`, `.rpt`, `.jou`, and `.log` files are ignored by default. Commit them only if the submission explicitly requires generated artifacts.
+
+## Standalone Check
+
+From a Mac/Linux shell with Icarus Verilog installed:
+
+```sh
+make top-syntax
+```
+
+This checks the local `src/` tree and the provided stubs without using any parent repository files.

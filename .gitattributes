@@ -3,9 +3,13 @@
 *.tcl text eol=lf
 *.md text eol=lf
 *.dat text eol=lf
+*.v text eol=lf
+*.V text eol=lf
+*.xdc text eol=lf
 *.bat text eol=crlf
 *.xpr text eol=lf
 
+*.edf binary
 *.bit binary
 *.bin binary
 *.ltx binary

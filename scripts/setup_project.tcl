@@ -1,6 +1,5 @@
 set script_dir [file normalize [file dirname [info script]]]
 set results_dir [file normalize [file join $script_dir ..]]
-set repo_root [file normalize [file join $results_dir ..]]
 
 set project_name OS_Exp_1
 set project_file [file join $results_dir ${project_name}.xpr]
@@ -44,7 +43,7 @@ set source_files {
 }
 
 foreach rel $source_files {
-    set abs [file normalize [file join $repo_root $rel]]
+    set abs [file normalize [file join $results_dir $rel]]
     if {![file exists $abs]} {
         error "Missing required source file: $abs"
     }
@@ -53,7 +52,7 @@ foreach rel $source_files {
     }
 }
 
-set constraint_file [file normalize [file join $repo_root constraints icf.xdc]]
+set constraint_file [file normalize [file join $results_dir constraints icf.xdc]]
 if {![file exists $constraint_file]} {
     error "Missing constraint file: $constraint_file"
 }

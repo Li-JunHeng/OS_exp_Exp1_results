@@ -1,4 +1,5 @@
 .DS_Store
+build/
 *.bit
 *.bin
 *.ltx
@@ -6,3 +7,8 @@
 *.log
 *.str
 reports/*.rpt
+
+.Xil/
+*.runs/
+*.sim/
+*.ip_user_files/
