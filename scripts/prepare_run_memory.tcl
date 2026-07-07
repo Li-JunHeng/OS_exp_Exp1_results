@@ -3,7 +3,7 @@ set results_dir [file normalize [file join $script_dir ..]]
 set run_dir [pwd]
 
 file mkdir [file join $run_dir memory]
-foreach name {Test_37_Instr8.dat D_mem.dat} {
+foreach name {testac.dat D_mem.dat} {
     set src [file join $results_dir memory $name]
     if {![file exists $src]} {
         error "Missing memory initialization file: $src"

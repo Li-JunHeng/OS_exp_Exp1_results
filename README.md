@@ -42,7 +42,7 @@ If you prefer Vivado GUI:
 
 - The scripts add sources from this repository's local `src/` and `constraints/` directories; a parent repository checkout is not needed.
 - `scripts/setup_project.tcl` intentionally excludes the provided CPU black-box stub (`SCPU.v`/`SCPU.edf`) because it conflicts with the implemented `src/cpu/SCPU.v`.
-- `memory/Test_37_Instr8.dat` and `memory/D_mem.dat` are copied here so Vivado synthesis can resolve `$readmemh("memory/...")` from the project/run directory.
+- `memory/testac.dat` and `memory/D_mem.dat` are copied into the synthesis run directory so Vivado can resolve `$readmemh("memory/...")`.
 - Generated `.bit`, `.rpt`, `.jou`, and `.log` files are ignored by default. Commit them only if the submission explicitly requires generated artifacts.
 
 ## Standalone Check

@@ -15,6 +15,21 @@ if {[llength [get_projects -quiet]] == 0} {
 
 set_property part $part_name [current_project]
 
+foreach rel {
+    src/ip/MIO_BUS.edf
+    src/ip/SPIO.edf
+    src/ip/dm_controller.edf
+    src/ip/Multi_8CH32.edf
+    src/ip/Multi_8CH32.v
+    src/ip/SSeg7.edf
+    src/ip/SSeg7.v
+} {
+    set abs [file normalize [file join $results_dir $rel]]
+    if {[llength [get_files -quiet $abs]] != 0} {
+        remove_files [get_files $abs]
+    }
+}
+
 set source_files {
     src/board/top.v
     src/board/data_ram.v
@@ -31,15 +46,8 @@ set source_files {
     src/io/clk_div.v
     src/io/Counter_3_IO.v
     src/ip/MIO_BUS.V
-    src/ip/MIO_BUS.edf
-    src/ip/Multi_8CH32.v
-    src/ip/Multi_8CH32.edf
     src/ip/SPIO.v
-    src/ip/SPIO.edf
-    src/ip/SSeg7.v
-    src/ip/SSeg7.edf
     src/ip/dm_controller.v
-    src/ip/dm_controller.edf
 }
 
 foreach rel $source_files {
@@ -60,7 +68,7 @@ if {[llength [get_files -quiet $constraint_file]] == 0} {
     add_files -fileset constrs_1 -norecurse [list $constraint_file]
 }
 
-foreach rel {memory/Test_37_Instr8.dat memory/D_mem.dat} {
+foreach rel {memory/testac.dat memory/D_mem.dat} {
     set abs [file normalize [file join $results_dir $rel]]
     if {![file exists $abs]} {
         error "Missing board initialization file: $abs"
@@ -73,12 +81,12 @@ foreach rel {memory/Test_37_Instr8.dat memory/D_mem.dat} {
 }
 
 set_property top top [current_fileset]
+set_property include_dirs [list [file normalize [file join $results_dir src cpu]]] [current_fileset]
 
 set prep_script [file normalize [file join $script_dir prepare_run_memory.tcl]]
 set_property STEPS.SYNTH_DESIGN.TCL.PRE $prep_script [get_runs synth_1]
 
 update_compile_order -fileset sources_1
-save_project_as -force $project_name $results_dir
 
 puts "Configured Vivado project: $project_file"
 puts "Top module: top"

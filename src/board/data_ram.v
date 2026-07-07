@@ -13,7 +13,7 @@ module data_ram(
     initial begin
         for (i = 0; i < 1024; i = i + 1)
             ram[i] = 32'b0;
-        $readmemh("memory/D_mem.dat", ram, 0, 42);
+        $readmemh("E:/Vivado/OS_Exp_1/memory/D_mem.dat", ram, 0, 42);
     end
 
     always @(posedge clk) begin
