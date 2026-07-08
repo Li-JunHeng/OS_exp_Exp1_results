@@ -5,10 +5,12 @@ build/
 *.ltx
 *.jou
 *.log
+*.pb
 *.str
 reports/*.rpt
 
 .Xil/
+xsim.dir/
 *.runs/
 *.sim/
 *.ip_user_files/
