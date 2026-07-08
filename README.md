@@ -47,13 +47,14 @@ If you prefer Vivado GUI:
 
 ## CPU Interrupt Support
 
-- `SCPU` has separate machine software, timer, generic external, UART, GPIO, SPI, and I2C interrupt inputs. The board top maps software interrupt to switch 14, timer interrupt to counter channel 0, UART to switch 13, GPIO to switch 15, SPI to counter channel 1, and I2C to counter channel 2.
+- `SCPU` has separate machine software, timer, generic external, UART, GPIO, SPI, I2C, and PS/2 keyboard interrupt inputs. The board top maps software interrupt to switch 14, timer interrupt to counter channel 0, UART to switch 13, GPIO to switch 15, SPI to counter channel 1, I2C to counter channel 2, and keyboard interrupt to the PS/2 receiver FIFO-not-empty signal.
 - The default machine trap vector is `mtvec = 0x00000080`. Traps save the return PC in `mepc`, write `mcause` and `mtval`, clear `mstatus.MIE`, and fetch from `mtvec`; `mret` restores `mstatus.MIE` and jumps back to `mepc`.
 - Implemented machine interrupts: software interrupt `mcause = 0x80000003`, timer interrupt `mcause = 0x80000007`, and external interrupt `mcause = 0x8000000b`.
 - Implemented synchronous traps: instruction access fault, illegal instruction, breakpoint (`ebreak`), machine environment call (`ecall`), load access fault, store access fault, instruction page fault, load page fault, and store page fault.
 - Implemented CSR instructions are `csrrw/csrrs/csrrc` and their immediate forms for `mstatus`, `mie`, `mtvec`, `mepc`, `mcause`, `mtval`, `mip`, `satp`, and the custom TLB CSRs.
 - The simplified MMU is enabled by `satp[31]` and uses 4KB pages with a 4-entry fully-associative TLB. Custom CSRs `0x7c0..0x7c3` select and program `tlbidx`, `tlbvpn`, `tlbppn`, and `tlbflags`; flag bits are `V/R/W/X` in bits `0..3`.
-- A simplified PLIC is implemented for concrete external interrupt IDs: UART=1, GPIO=2, SPI=3, and I2C=4. Custom CSRs `0x7d0..0x7d3` expose `plicpending`, `plicenable`, `plicclaim`, and `plicforce`; `plicclaim` returns the active ID, and writing the handled ID back completes the interrupt.
+- A simplified PLIC is implemented for concrete external interrupt IDs: UART=1, GPIO=2, SPI=3, I2C=4, and keyboard=5. Custom CSRs `0x7d0..0x7d3` expose `plicpending`, `plicenable`, `plicclaim`, and `plicforce`; `plicclaim` returns the active ID, and writing the handled ID back completes the interrupt.
+- The PS/2 keyboard controller is memory-mapped at `0xd0000000` and `0xd0000004`. Reading `0xd0000000` returns the next raw scan-code byte in bits `7..0` and pops the FIFO. Reading `0xd0000004` returns status: bit 0 `valid`, bit 1 `full`, bit 2 `overflow`, bit 3 `frame_error`, bit 4 `parity_error`, and bits `11..8` FIFO count. Writing `0xd0000004` clears sticky error flags. The hardware validates PS/2 start/stop/parity bits, times out partial frames, and buffers up to 8 scan-code bytes.
 
 ## Standalone Check
 

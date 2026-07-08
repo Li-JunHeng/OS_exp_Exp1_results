@@ -33,6 +33,7 @@ foreach rel {
 set source_files {
     src/board/top.v
     src/board/seg_display.v
+    src/board/vga_hex_display.v
     src/board/data_ram.v
     src/cpu/ctrl_encode_def.v
     src/cpu/alu.v
@@ -46,6 +47,7 @@ set source_files {
     src/io/Enter.v
     src/io/clk_div.v
     src/io/Counter_3_IO.v
+    src/io/ps2_keyboard.v
     src/ip/MIO_BUS.V
     src/ip/SPIO.v
     src/ip/dm_controller.v

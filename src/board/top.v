@@ -3,6 +3,8 @@
 module top(
     input         clk,
     input         rstn,
+    input         ps2_clk,
+    input         ps2_data,
     input  [15:0] sw_i,
     output [15:0] led_o,
     output [7:0]  disp_an_o,
@@ -18,6 +20,7 @@ module top(
     wire [31:0] inst;
     wire [31:0] pc;
     wire        mem_w;
+    wire        mem_r;
     wire [31:0] addr_bus;
     wire [31:0] cpu_data_out;
     wire [31:0] cpu_data_in;
@@ -48,6 +51,21 @@ module top(
     wire        cpu_gpio_irq;
     wire        cpu_spi_irq;
     wire        cpu_i2c_irq;
+    wire        cpu_keyboard_irq;
+    wire [7:0]  ps2_rx_data;
+    wire [7:0]  ps2_latest_data;
+    wire        ps2_data_valid;
+    wire [3:0]  ps2_data_count;
+    wire        ps2_fifo_full;
+    wire        ps2_overflow;
+    wire        ps2_frame_error;
+    wire        ps2_parity_error;
+    wire        ps2_rd_en;
+    wire        ps2_clear_errors;
+    wire [31:0] display_value;
+    (* keep = "true" *) wire        vga_hsync_unused;
+    (* keep = "true" *) wire        vga_vsync_unused;
+    (* keep = "true" *) wire [11:0] vga_rgb_unused;
 
     assign cpu_software_irq = sw_clean[14];
     assign cpu_timer_irq = counter0_out;
@@ -87,9 +105,19 @@ module top(
         .ram_addr(ram_addr),
         .cpu_data_out(cpu_data_out),
         .cpu_data_in(cpu_data_in),
+        .display_value_o(display_value),
         .led_o(led_o),
         .disp_an_o(disp_an_o),
         .disp_seg_o(disp_seg_o)
+    );
+
+    vga_hex_display U_VGA_HEX_DISPLAY(
+        .clk(clk),
+        .rst(rst),
+        .value(display_value),
+        .vga_hsync(vga_hsync_unused),
+        .vga_vsync(vga_vsync_unused),
+        .vga_rgb(vga_rgb_unused)
     );
 
     im U_IM(
@@ -97,7 +125,11 @@ module top(
         .dout(inst)
     );
 
-    SCPU U_SCPU(
+    SCPU #(
+        .RESET_MSTATUS(32'h0000_0000),
+        .RESET_MIE(32'h0000_0000),
+        .RESET_MTVEC(32'h0000_0000)
+    ) U_SCPU(
         .clk(clk_cpu),
         .reset(rst),
         .software_irq(cpu_software_irq),
@@ -107,8 +139,10 @@ module top(
         .gpio_irq(cpu_gpio_irq),
         .spi_irq(cpu_spi_irq),
         .i2c_irq(cpu_i2c_irq),
+        .keyboard_irq(cpu_keyboard_irq),
         .inst_in(inst),
         .Data_in(cpu_data_in),
+        .mem_r(mem_r),
         .mem_w(mem_w),
         .PC_out(pc),
         .Addr_out(addr_bus),
@@ -135,6 +169,7 @@ module top(
         .BTN(btn_clean),
         .SW(sw_clean),
         .PC(pc),
+        .mem_r(mem_r),
         .mem_w(mem_w),
         .Cpu_data2bus(data_write_to_dm),
         .addr_bus(addr_bus),
@@ -144,6 +179,13 @@ module top(
         .counter0_out(counter0_out),
         .counter1_out(counter1_out),
         .counter2_out(counter2_out),
+        .ps2_data(ps2_rx_data),
+        .ps2_data_valid(ps2_data_valid),
+        .ps2_data_count(ps2_data_count),
+        .ps2_fifo_full(ps2_fifo_full),
+        .ps2_overflow(ps2_overflow),
+        .ps2_frame_error(ps2_frame_error),
+        .ps2_parity_error(ps2_parity_error),
         .Cpu_data4bus(bus_data_to_cpu),
         .ram_data_in(ram_data_in),
         .ram_addr(ram_addr),
@@ -151,7 +193,28 @@ module top(
         .GPIOf0000000_we(gpio_led_we),
         .GPIOe0000000_we(gpio_display_we),
         .counter_we(counter_we),
-        .Peripheral_in(peripheral_in)
+        .Peripheral_in(peripheral_in),
+        .ps2_rd_en(ps2_rd_en),
+        .ps2_clear_errors(ps2_clear_errors)
+    );
+
+    ps2_keyboard U_PS2_KEYBOARD(
+        .wr_clk(clk),
+        .rd_clk(clk_cpu),
+        .rst(rst),
+        .ps2_clk(ps2_clk),
+        .ps2_data(ps2_data),
+        .rd_en(ps2_rd_en),
+        .clear_errors(ps2_clear_errors),
+        .data(ps2_rx_data),
+        .latest_data(ps2_latest_data),
+        .data_valid(ps2_data_valid),
+        .irq(cpu_keyboard_irq),
+        .data_count(ps2_data_count),
+        .fifo_full(ps2_fifo_full),
+        .overflow(ps2_overflow),
+        .frame_error(ps2_frame_error),
+        .parity_error(ps2_parity_error)
     );
 
     data_ram U_DATA_RAM(

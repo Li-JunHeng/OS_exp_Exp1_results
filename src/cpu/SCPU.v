@@ -15,9 +15,11 @@ module SCPU #(
     input         gpio_irq,
     input         spi_irq,
     input         i2c_irq,
+    input         keyboard_irq,
     input  [31:0] inst_in,
     input  [31:0] Data_in,
 
+    output        mem_r,
     output        mem_w,
     output [31:0] PC_out,
     output [31:0] Addr_out,
@@ -51,6 +53,7 @@ module SCPU #(
     localparam [2:0] PLIC_ID_GPIO = 3'd2;
     localparam [2:0] PLIC_ID_SPI  = 3'd3;
     localparam [2:0] PLIC_ID_I2C  = 3'd4;
+    localparam [2:0] PLIC_ID_KEYBOARD = 3'd5;
 
     localparam [31:0] CAUSE_INST_ACCESS_FAULT = 32'd1;
     localparam [31:0] CAUSE_ILLEGAL_INST      = 32'd2;
@@ -116,6 +119,7 @@ module SCPU #(
     reg [4:0]  ex_mem_rd;
     reg        ex_mem_regwrite;
     reg        ex_mem_memwrite;
+    reg        ex_mem_memread;
     reg [1:0]  ex_mem_wdsel;
     reg [2:0]  ex_mem_dm_ctrl;
     reg        ex_mem_csr_write;
@@ -168,8 +172,10 @@ module SCPU #(
     reg spi_irq_sync;
     reg i2c_irq_meta;
     reg i2c_irq_sync;
-    reg [4:0] plic_pending;
-    reg [4:0] plic_enable;
+    reg keyboard_irq_meta;
+    reg keyboard_irq_sync;
+    reg [5:0] plic_pending;
+    reg [5:0] plic_enable;
     reg irq_drain;
     reg [31:0] irq_drain_cause;
 
@@ -380,24 +386,26 @@ module SCPU #(
 
     wire software_irq_pending = software_irq_sync || csr_mip_msip;
     wire timer_irq_pending = timer_irq_sync;
-    wire [4:0] plic_source_bits = {i2c_irq_sync, spi_irq_sync,
+    wire [5:0] plic_source_bits = {keyboard_irq_sync, i2c_irq_sync, spi_irq_sync,
                                    (gpio_irq_sync | external_irq_sync),
                                    uart_irq_sync, 1'b0};
-    wire [4:0] plic_active_pending = plic_pending | plic_source_bits;
-    wire [4:0] plic_enabled_pending = plic_active_pending & plic_enable;
-    wire external_irq_pending = |plic_enabled_pending[4:1];
+    wire [5:0] plic_active_pending = plic_pending | plic_source_bits;
+    wire [5:0] plic_enabled_pending = plic_active_pending & plic_enable;
+    wire external_irq_pending = |plic_enabled_pending[5:1];
     wire [2:0] plic_claim_id =
         plic_enabled_pending[1] ? PLIC_ID_UART :
         plic_enabled_pending[2] ? PLIC_ID_GPIO :
         plic_enabled_pending[3] ? PLIC_ID_SPI :
         plic_enabled_pending[4] ? PLIC_ID_I2C :
+        plic_enabled_pending[5] ? PLIC_ID_KEYBOARD :
                                   PLIC_ID_NONE;
-    wire [4:0] plic_claim_mask =
-        (mem_wb_csr_wdata[2:0] == PLIC_ID_UART) ? 5'b00010 :
-        (mem_wb_csr_wdata[2:0] == PLIC_ID_GPIO) ? 5'b00100 :
-        (mem_wb_csr_wdata[2:0] == PLIC_ID_SPI)  ? 5'b01000 :
-        (mem_wb_csr_wdata[2:0] == PLIC_ID_I2C)  ? 5'b10000 :
-                                                   5'b00000;
+    wire [5:0] plic_claim_mask =
+        (mem_wb_csr_wdata[2:0] == PLIC_ID_UART) ? 6'b000010 :
+        (mem_wb_csr_wdata[2:0] == PLIC_ID_GPIO) ? 6'b000100 :
+        (mem_wb_csr_wdata[2:0] == PLIC_ID_SPI)  ? 6'b001000 :
+        (mem_wb_csr_wdata[2:0] == PLIC_ID_I2C)  ? 6'b010000 :
+        (mem_wb_csr_wdata[2:0] == PLIC_ID_KEYBOARD) ? 6'b100000 :
+                                                       6'b000000;
     wire software_irq_ready = software_irq_pending && csr_mie[3];
     wire timer_irq_ready = timer_irq_pending && csr_mie[7];
     wire external_irq_ready = external_irq_pending && csr_mie[11];
@@ -429,15 +437,17 @@ module SCPU #(
                                                    tlb_read[csr_tlbidx],
                                                    tlb_valid[csr_tlbidx]},
                                                   mem_wb_csr_wdata, mem_wb_csr_cmd);
-    wire [31:0] csr_plic_pending_next = csr_apply_cmd({27'b0, plic_active_pending}, mem_wb_csr_wdata, mem_wb_csr_cmd);
-    wire [31:0] csr_plic_enable_next = csr_apply_cmd({27'b0, plic_enable}, mem_wb_csr_wdata, mem_wb_csr_cmd);
+    wire [31:0] csr_plic_pending_next = csr_apply_cmd({26'b0, plic_active_pending}, mem_wb_csr_wdata, mem_wb_csr_cmd);
+    wire [31:0] csr_plic_enable_next = csr_apply_cmd({26'b0, plic_enable}, mem_wb_csr_wdata, mem_wb_csr_cmd);
     wire [31:0] csr_plic_force_next = csr_apply_cmd(32'b0, mem_wb_csr_wdata, mem_wb_csr_cmd);
 
     wire data_addr_ram = (data_phys_addr[31:12] == 20'h00000);
     wire data_addr_gpioe = (data_phys_addr == 32'he0000000);
     wire data_addr_gpiof = (data_phys_addr == 32'hf0000000);
     wire data_addr_counter = (data_phys_addr[31:4] == 28'hf000000) && !data_addr_gpiof;
-    wire data_addr_valid = data_addr_ram || data_addr_gpioe || data_addr_gpiof || data_addr_counter;
+    wire data_addr_ps2 = (data_phys_addr == 32'hd0000000) || (data_phys_addr == 32'hd0000004);
+    wire data_addr_valid = data_addr_ram || data_addr_gpioe || data_addr_gpiof || data_addr_counter ||
+                           data_addr_ps2;
     wire data_addr_misaligned =
         ((id_ex_dm_ctrl == `dm_word) && (data_phys_addr[1:0] != 2'b00)) ||
         (((id_ex_dm_ctrl == `dm_halfword) || (id_ex_dm_ctrl == `dm_halfword_unsigned)) &&
@@ -463,6 +473,7 @@ module SCPU #(
         (id_ex_is_load || id_ex_is_store) ? data_phys_addr : ex_alu_result;
 
     assign PC_out = if_phys_addr;
+    assign mem_r = ex_mem_valid && ex_mem_memread;
     assign mem_w = ex_mem_valid && ex_mem_memwrite;
     assign Addr_out = ex_mem_alu_result;
     assign Data_out = ex_mem_store_data;
@@ -493,8 +504,8 @@ module SCPU #(
                                                 tlb_write[csr_tlbidx],
                                                 tlb_read[csr_tlbidx],
                                                 tlb_valid[csr_tlbidx]};
-                CSR_PLIC_PENDING: csr_read_data = {27'b0, plic_active_pending};
-                CSR_PLIC_ENABLE:  csr_read_data = {27'b0, plic_enable};
+                CSR_PLIC_PENDING: csr_read_data = {26'b0, plic_active_pending};
+                CSR_PLIC_ENABLE:  csr_read_data = {26'b0, plic_enable};
                 CSR_PLIC_CLAIM:   csr_read_data = {29'b0, plic_claim_id};
                 CSR_PLIC_FORCE:   csr_read_data = 32'b0;
                 default:     csr_read_data = 32'b0;
@@ -615,6 +626,7 @@ module SCPU #(
             ex_mem_rd <= 5'b0;
             ex_mem_regwrite <= 1'b0;
             ex_mem_memwrite <= 1'b0;
+            ex_mem_memread <= 1'b0;
             ex_mem_wdsel <= `WDSel_FromALU;
             ex_mem_dm_ctrl <= `dm_word;
             ex_mem_csr_write <= 1'b0;
@@ -668,8 +680,10 @@ module SCPU #(
             spi_irq_sync <= 1'b0;
             i2c_irq_meta <= 1'b0;
             i2c_irq_sync <= 1'b0;
-            plic_pending <= 5'b00000;
-            plic_enable <= 5'b11110;
+            keyboard_irq_meta <= 1'b0;
+            keyboard_irq_sync <= 1'b0;
+            plic_pending <= 6'b000000;
+            plic_enable <= 6'b111110;
             irq_drain <= 1'b0;
             irq_drain_cause <= 32'b0;
         end else begin
@@ -687,13 +701,15 @@ module SCPU #(
             spi_irq_sync <= spi_irq_meta;
             i2c_irq_meta <= i2c_irq;
             i2c_irq_sync <= i2c_irq_meta;
+            keyboard_irq_meta <= keyboard_irq;
+            keyboard_irq_sync <= keyboard_irq_meta;
 
             if (mem_wb_valid && mem_wb_csr_write && mem_wb_csr_addr == CSR_PLIC_PENDING) begin
-                plic_pending <= csr_plic_pending_next[4:0] & 5'b11110;
+                plic_pending <= csr_plic_pending_next[5:0] & 6'b111110;
             end else if (mem_wb_valid && mem_wb_csr_write && mem_wb_csr_addr == CSR_PLIC_CLAIM) begin
                 plic_pending <= (plic_pending | plic_source_bits) & ~plic_claim_mask;
             end else if (mem_wb_valid && mem_wb_csr_write && mem_wb_csr_addr == CSR_PLIC_FORCE) begin
-                plic_pending <= (plic_pending | plic_source_bits | csr_plic_force_next[4:0]) & 5'b11110;
+                plic_pending <= (plic_pending | plic_source_bits | csr_plic_force_next[5:0]) & 6'b111110;
             end else begin
                 plic_pending <= plic_pending | plic_source_bits;
             end
@@ -717,7 +733,7 @@ module SCPU #(
                         tlb_write[csr_tlbidx] <= csr_tlbflags_next[2];
                         tlb_exec[csr_tlbidx] <= csr_tlbflags_next[3];
                     end
-                    CSR_PLIC_ENABLE: plic_enable <= csr_plic_enable_next[4:0] & 5'b11110;
+                    CSR_PLIC_ENABLE: plic_enable <= csr_plic_enable_next[5:0] & 6'b111110;
                     default: begin
                     end
                 endcase
@@ -769,6 +785,7 @@ module SCPU #(
             ex_mem_rd <= id_ex_rd;
             ex_mem_regwrite <= id_ex_regwrite && !ex_mret && !ex_exception;
             ex_mem_memwrite <= id_ex_memwrite && !ex_mret && !ex_exception;
+            ex_mem_memread <= id_ex_is_load && !ex_mret && !ex_exception;
             ex_mem_wdsel <= id_ex_wdsel;
             ex_mem_dm_ctrl <= id_ex_dm_ctrl;
             ex_mem_csr_write <= id_ex_csr_write && !ex_mret && !ex_exception;

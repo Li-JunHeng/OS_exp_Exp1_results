@@ -10,6 +10,7 @@ module tb_plic;
     reg gpio_irq = 1'b0;
     reg spi_irq = 1'b0;
     reg i2c_irq = 1'b0;
+    reg keyboard_irq = 1'b0;
     reg [4:0] reg_sel = 5'd10;
 
     wire mem_w;
@@ -34,8 +35,10 @@ module tb_plic;
         .gpio_irq(gpio_irq),
         .spi_irq(spi_irq),
         .i2c_irq(i2c_irq),
+        .keyboard_irq(keyboard_irq),
         .inst_in(inst),
         .Data_in(32'b0),
+        .mem_r(),
         .mem_w(mem_w),
         .PC_out(pc),
         .Addr_out(addr_out),
@@ -69,6 +72,7 @@ module tb_plic;
             gpio_irq = 1'b0;
             spi_irq = 1'b0;
             i2c_irq = 1'b0;
+            keyboard_irq = 1'b0;
             reset = 1'b1;
             repeat (4) @(posedge clk);
             reset = 1'b0;
@@ -84,6 +88,7 @@ module tb_plic;
                 3'd2: gpio_irq = 1'b1;
                 3'd3: spi_irq = 1'b1;
                 3'd4: i2c_irq = 1'b1;
+                3'd5: keyboard_irq = 1'b1;
                 default: begin
                 end
             endcase
@@ -92,6 +97,7 @@ module tb_plic;
             gpio_irq = 1'b0;
             spi_irq = 1'b0;
             i2c_irq = 1'b0;
+            keyboard_irq = 1'b0;
         end
     endtask
 
@@ -117,7 +123,7 @@ module tb_plic;
                         saw_claim = 1'b1;
                     end
                     if (saw_trap && saw_claim && pc < 32'h0000_0080 &&
-                        ((U_SCPU.plic_pending & (5'b00001 << irq_id)) == 5'b0)) begin
+                        ((U_SCPU.plic_pending & (6'b000001 << irq_id)) == 6'b0)) begin
                         disable wait_loop;
                     end
                 end
@@ -131,7 +137,7 @@ module tb_plic;
                 $fatal(1, "PLIC irq %0d claim mismatch, x10=%h claim=%h pending=%b",
                        irq_id, reg_data, U_SCPU.plic_claim_id, U_SCPU.plic_pending);
             end
-            if ((U_SCPU.plic_pending & (5'b00001 << irq_id)) != 5'b0) begin
+            if ((U_SCPU.plic_pending & (6'b000001 << irq_id)) != 6'b0) begin
                 $fatal(1, "PLIC irq %0d was not completed, pending=%b",
                        irq_id, U_SCPU.plic_pending);
             end
@@ -143,7 +149,8 @@ module tb_plic;
         check_irq(3'd2);
         check_irq(3'd3);
         check_irq(3'd4);
-        $display("PASS: UART/GPIO/SPI/I2C PLIC interrupt IDs were claimed and completed");
+        check_irq(3'd5);
+        $display("PASS: UART/GPIO/SPI/I2C/keyboard PLIC interrupt IDs were claimed and completed");
         $finish;
     end
 endmodule

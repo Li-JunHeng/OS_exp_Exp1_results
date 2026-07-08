@@ -15,6 +15,7 @@ module seg_display(
     input  [9:0]  ram_addr,
     input  [31:0] cpu_data_out,
     input  [31:0] cpu_data_in,
+    output [31:0] display_value_o,
     output reg [15:0] led_o,
     output reg [7:0]  disp_an_o,
     output reg [7:0]  disp_seg_o
@@ -24,10 +25,10 @@ module seg_display(
     reg  [31:0] display_value;
     reg  [31:0] selected_display_value;
     reg  [3:0]  selected_nibble;
-    reg  [7:0]  raw_seg;
     wire        display_we;
 
     assign display_we = mem_w && (addr_bus == DISPLAY_ADDR);
+    assign display_value_o = display_value;
 
     always @(posedge clk_cpu or posedge rst) begin
         if (rst)
@@ -63,15 +64,6 @@ module seg_display(
     end
 
     always @(*) begin
-        case (clkdiv[14:13])
-            2'd0: raw_seg = display_value[7:0];
-            2'd1: raw_seg = display_value[15:8];
-            2'd2: raw_seg = display_value[23:16];
-            default: raw_seg = display_value[31:24];
-        endcase
-    end
-
-    always @(*) begin
         case (clkdiv[15:13])
             3'd0: begin disp_an_o = 8'b1111_1110; selected_nibble = selected_display_value[3:0]; end
             3'd1: begin disp_an_o = 8'b1111_1101; selected_nibble = selected_display_value[7:4]; end
@@ -83,7 +75,7 @@ module seg_display(
             default: begin disp_an_o = 8'b0111_1111; selected_nibble = selected_display_value[31:28]; end
         endcase
 
-        disp_seg_o = (display_sel == 3'b000) ? raw_seg : hex_to_seg(selected_nibble);
+        disp_seg_o = hex_to_seg(selected_nibble);
     end
 
     function [7:0] hex_to_seg;

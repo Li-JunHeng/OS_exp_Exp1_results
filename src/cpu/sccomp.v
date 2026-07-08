@@ -25,8 +25,10 @@ module sccomp(clk, rstn, reg_sel, reg_data);
          .gpio_irq(1'b0),
          .spi_irq(1'b0),
          .i2c_irq(1'b0),
+         .keyboard_irq(1'b0),
          .inst_in(instr),             // input:  instruction
          .Data_in(dm_dout),        // input:  data to cpu  
+         .mem_r(),
          .mem_w(MemWrite),       // output: memory write signal
          .PC_out(PC),                   // output: PC
          .Addr_out(dm_addr),          // output: address from cpu to memory
