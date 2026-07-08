@@ -8,7 +8,12 @@ module top(
     input  [15:0] sw_i,
     output [15:0] led_o,
     output [7:0]  disp_an_o,
-    output [7:0]  disp_seg_o
+    output [7:0]  disp_seg_o,
+    output [3:0]  vga_red,
+    output [3:0]  vga_green,
+    output [3:0]  vga_blue,
+    output        vga_hsync,
+    output        vga_vsync
 );
     wire rst = ~rstn;
 
@@ -63,12 +68,14 @@ module top(
     wire        ps2_rd_en;
     wire        ps2_clear_errors;
     wire [31:0] display_value;
-    (* keep = "true" *) wire        vga_hsync_unused;
-    (* keep = "true" *) wire        vga_vsync_unused;
-    (* keep = "true" *) wire [11:0] vga_rgb_unused;
+    wire [31:0] vga_data_out;
+    wire        vga_we;
+    wire        vga_re;
+    wire        vga_vblank_irq;
 
+    assign clk_cpu = clk;
     assign cpu_software_irq = sw_clean[14];
-    assign cpu_timer_irq = counter0_out;
+    assign cpu_timer_irq = vga_vblank_irq;
     assign cpu_uart_irq = sw_clean[13];
     assign cpu_gpio_irq = sw_clean[15];
     assign cpu_spi_irq = counter1_out;
@@ -87,7 +94,7 @@ module top(
         .rst(rst),
         .SW2(sw_clean[2]),
         .clkdiv(clkdiv),
-        .Clk_CPU(clk_cpu)
+        .Clk_CPU()
     );
 
     seg_display U_SEG_DISPLAY(
@@ -111,17 +118,24 @@ module top(
         .disp_seg_o(disp_seg_o)
     );
 
-    vga_hex_display U_VGA_HEX_DISPLAY(
+    vga_tile_sprite_display U_VGA_TILE_SPRITE_DISPLAY(
         .clk(clk),
         .rst(rst),
-        .value(display_value),
-        .vga_hsync(vga_hsync_unused),
-        .vga_vsync(vga_vsync_unused),
-        .vga_rgb(vga_rgb_unused)
+        .mem_w(vga_we),
+        .mem_r(vga_re),
+        .addr(addr_bus),
+        .wdata(data_write_to_dm),
+        .rdata(vga_data_out),
+        .vblank_irq(vga_vblank_irq),
+        .vga_hsync(vga_hsync),
+        .vga_vsync(vga_vsync),
+        .vga_red(vga_red),
+        .vga_green(vga_green),
+        .vga_blue(vga_blue)
     );
 
     im U_IM(
-        .addr(pc[11:2]),
+        .addr(pc[13:2]),
         .dout(inst)
     );
 
@@ -186,6 +200,7 @@ module top(
         .ps2_overflow(ps2_overflow),
         .ps2_frame_error(ps2_frame_error),
         .ps2_parity_error(ps2_parity_error),
+        .vga_data_out(vga_data_out),
         .Cpu_data4bus(bus_data_to_cpu),
         .ram_data_in(ram_data_in),
         .ram_addr(ram_addr),
@@ -195,7 +210,9 @@ module top(
         .counter_we(counter_we),
         .Peripheral_in(peripheral_in),
         .ps2_rd_en(ps2_rd_en),
-        .ps2_clear_errors(ps2_clear_errors)
+        .ps2_clear_errors(ps2_clear_errors),
+        .vga_we(vga_we),
+        .vga_re(vga_re)
     );
 
     ps2_keyboard U_PS2_KEYBOARD(

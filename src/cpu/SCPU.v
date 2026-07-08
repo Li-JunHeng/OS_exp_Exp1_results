@@ -126,6 +126,10 @@ module SCPU #(
     reg [1:0]  ex_mem_csr_cmd;
     reg [11:0] ex_mem_csr_addr;
     reg [31:0] ex_mem_csr_wdata;
+    reg        ex_mem_exception;
+    reg [31:0] ex_mem_exception_cause;
+    reg [31:0] ex_mem_exception_tval;
+    reg [31:0] ex_mem_pc;
 
     reg        mem_wb_valid;
     reg [31:0] mem_wb_alu_result;
@@ -178,6 +182,8 @@ module SCPU #(
     reg [5:0] plic_enable;
     reg irq_drain;
     reg [31:0] irq_drain_cause;
+    reg redirect_pending;
+    reg [31:0] redirect_pc;
 
     integer tlb_i;
     integer tlb_reset_i;
@@ -313,31 +319,44 @@ module SCPU #(
         (mem_wb_regwrite && mem_wb_rd != 5'b0 && mem_wb_rd == id_rs2) ? wb_data : rf_rd2;
     assign id_csr_wdata = id_csr_imm ? {27'b0, id_rs1} : id_rd1_bypass;
 
-    wire [31:0] mem_stage_wb_data =
-        (ex_mem_wdsel == `WDSel_FromMEM) ? Data_in :
-        (ex_mem_wdsel == `WDSel_FromPC)  ? ex_mem_pc4 :
-        (ex_mem_wdsel == `WDSel_FromCSR) ? ex_mem_csr_rdata :
-                                           ex_mem_alu_result;
-
-    wire [31:0] ex_rs1_value =
-        (ex_mem_regwrite && ex_mem_rd != 5'b0 && ex_mem_rd == id_ex_rs1) ? mem_stage_wb_data :
-        (mem_wb_regwrite && mem_wb_rd != 5'b0 && mem_wb_rd == id_ex_rs1) ? wb_data :
-                                                                           id_ex_rd1;
-    wire [31:0] ex_rs2_value =
-        (ex_mem_regwrite && ex_mem_rd != 5'b0 && ex_mem_rd == id_ex_rs2) ? mem_stage_wb_data :
-        (mem_wb_regwrite && mem_wb_rd != 5'b0 && mem_wb_rd == id_ex_rs2) ? wb_data :
-                                                                           id_ex_rd2;
+    wire [31:0] ex_rs1_value = id_ex_rd1;
+    wire [31:0] ex_rs2_value = id_ex_rd2;
     wire [31:0] ex_alu_b = id_ex_alusrc ? id_ex_imm : ex_rs2_value;
     wire [31:0] ex_alu_result;
     wire        ex_zero;
+    wire [31:0] ex_addr_sum = ex_rs1_value + id_ex_imm;
 
+    wire        ex_branch_eq = (ex_rs1_value == ex_rs2_value);
+    wire        ex_branch_lt = ($signed(ex_rs1_value) < $signed(ex_rs2_value));
+    wire        ex_branch_ltu = (ex_rs1_value < ex_rs2_value);
+    wire        ex_branch_condition =
+        (id_ex_aluop == `ALUOp_sub)  ? ex_branch_eq :
+        (id_ex_aluop == `ALUOp_bne)  ? !ex_branch_eq :
+        (id_ex_aluop == `ALUOp_blt)  ? ex_branch_lt :
+        (id_ex_aluop == `ALUOp_bge)  ? !ex_branch_lt :
+        (id_ex_aluop == `ALUOp_bltu) ? ex_branch_ltu :
+        (id_ex_aluop == `ALUOp_bgeu) ? !ex_branch_ltu :
+                                       1'b0;
+    wire [31:0] ex_jalr_target_sum = ex_rs1_value + id_ex_imm;
+    wire        ex_control_flow = id_ex_valid &&
+                                  (id_ex_is_branch || id_ex_is_jal || id_ex_is_jalr);
     wire        ex_take_branch = id_ex_valid &&
-                                 ((id_ex_is_branch && ex_zero) ||
+                                 ((id_ex_is_branch && ex_branch_condition) ||
                                   id_ex_is_jal ||
                                   id_ex_is_jalr);
     wire        ex_mret = id_ex_valid && id_ex_is_mret;
-    wire [31:0] ex_branch_target = id_ex_is_jalr ? {ex_alu_result[31:1], 1'b0} :
+    wire [31:0] ex_branch_target = id_ex_is_jalr ? {ex_jalr_target_sum[31:1], 1'b0} :
                                                     (id_ex_pc + id_ex_imm);
+    wire [31:0] ex_control_flow_target = id_ex_is_branch ?
+                                          (ex_branch_condition ? ex_branch_target : id_ex_pc4) :
+                                          ex_branch_target;
+    wire        id_depends_on_id_ex = if_id_valid && id_ex_valid && id_ex_regwrite &&
+                                      (id_ex_rd != 5'b0) &&
+                                      ((id_ex_rd == id_rs1) || (id_ex_rd == id_rs2));
+    wire        id_depends_on_ex_mem = if_id_valid && ex_mem_valid && ex_mem_regwrite &&
+                                       !ex_mem_exception && (ex_mem_rd != 5'b0) &&
+                                       ((ex_mem_rd == id_rs1) || (ex_mem_rd == id_rs2));
+    wire        data_hazard_stall = id_depends_on_id_ex || id_depends_on_ex_mem;
 
     wire mmu_enabled = csr_satp[31];
 
@@ -364,7 +383,7 @@ module SCPU #(
                 if_tlb_exec = tlb_exec[tlb_i];
                 if_tlb_ppn = tlb_ppn[tlb_i];
             end
-            if (tlb_valid[tlb_i] && tlb_vpn[tlb_i] == ex_alu_result[31:12] && !data_tlb_hit) begin
+            if (tlb_valid[tlb_i] && tlb_vpn[tlb_i] == ex_addr_sum[31:12] && !data_tlb_hit) begin
                 data_tlb_hit = 1'b1;
                 data_tlb_read = tlb_read[tlb_i];
                 data_tlb_write = tlb_write[tlb_i];
@@ -376,9 +395,9 @@ module SCPU #(
     wire [31:0] if_phys_addr = mmu_enabled ? {if_tlb_ppn, pc_if[11:0]} : pc_if;
     wire if_page_fault = mmu_enabled && (!if_tlb_hit || !if_tlb_exec);
     wire if_access_fault = !if_page_fault &&
-                           ((if_phys_addr[1:0] != 2'b00) || (if_phys_addr[31:12] != 20'b0));
+                           ((if_phys_addr[1:0] != 2'b00) || (if_phys_addr[31:14] != 18'b0));
 
-    wire [31:0] data_phys_addr = mmu_enabled ? {data_tlb_ppn, ex_alu_result[11:0]} : ex_alu_result;
+    wire [31:0] data_phys_addr = mmu_enabled ? {data_tlb_ppn, ex_addr_sum[11:0]} : ex_addr_sum;
     wire ex_load_page_fault = id_ex_valid && id_ex_is_load &&
                               mmu_enabled && (!data_tlb_hit || !data_tlb_read);
     wire ex_store_page_fault = id_ex_valid && id_ex_is_store &&
@@ -442,12 +461,13 @@ module SCPU #(
     wire [31:0] csr_plic_force_next = csr_apply_cmd(32'b0, mem_wb_csr_wdata, mem_wb_csr_cmd);
 
     wire data_addr_ram = (data_phys_addr[31:12] == 20'h00000);
+    wire data_addr_vga = (data_phys_addr[31:16] == 16'hc000);
     wire data_addr_gpioe = (data_phys_addr == 32'he0000000);
     wire data_addr_gpiof = (data_phys_addr == 32'hf0000000);
     wire data_addr_counter = (data_phys_addr[31:4] == 28'hf000000) && !data_addr_gpiof;
     wire data_addr_ps2 = (data_phys_addr == 32'hd0000000) || (data_phys_addr == 32'hd0000004);
     wire data_addr_valid = data_addr_ram || data_addr_gpioe || data_addr_gpiof || data_addr_counter ||
-                           data_addr_ps2;
+                           data_addr_ps2 || data_addr_vga;
     wire data_addr_misaligned =
         ((id_ex_dm_ctrl == `dm_word) && (data_phys_addr[1:0] != 2'b00)) ||
         (((id_ex_dm_ctrl == `dm_halfword) || (id_ex_dm_ctrl == `dm_halfword_unsigned)) &&
@@ -467,14 +487,22 @@ module SCPU #(
                                 CAUSE_STORE_ACCESS_FAULT;
     wire [31:0] ex_exception_tval =
         id_ex_exception ? id_ex_exception_tval :
-                          ex_alu_result;
+        (ex_load_page_fault || ex_store_page_fault) ? ex_addr_sum :
+                          data_phys_addr;
 
     wire [31:0] ex_result_to_mem =
         (id_ex_is_load || id_ex_is_store) ? data_phys_addr : ex_alu_result;
+    wire        mem_exception = ex_mem_valid && ex_mem_exception;
+    wire        redirect_request = mem_exception || irq_take_now || ex_mret || ex_control_flow;
+    wire [31:0] redirect_request_pc =
+        (mem_exception || irq_take_now) ? mtvec_direct :
+        ex_mret                        ? csr_mepc :
+                                         ex_control_flow_target;
+    wire        kill_ex_to_mem = redirect_pending || mem_exception || irq_take_now;
 
     assign PC_out = if_phys_addr;
-    assign mem_r = ex_mem_valid && ex_mem_memread;
-    assign mem_w = ex_mem_valid && ex_mem_memwrite;
+    assign mem_r = ex_mem_valid && ex_mem_memread && !ex_mem_exception;
+    assign mem_w = ex_mem_valid && ex_mem_memwrite && !ex_mem_exception;
     assign Addr_out = ex_mem_alu_result;
     assign Data_out = ex_mem_store_data;
     assign dm_ctrl = ex_mem_dm_ctrl;
@@ -633,6 +661,10 @@ module SCPU #(
             ex_mem_csr_cmd <= CSR_CMD_WRITE;
             ex_mem_csr_addr <= 12'b0;
             ex_mem_csr_wdata <= 32'b0;
+            ex_mem_exception <= 1'b0;
+            ex_mem_exception_cause <= 32'b0;
+            ex_mem_exception_tval <= 32'b0;
+            ex_mem_pc <= 32'b0;
 
             mem_wb_valid <= 1'b0;
             mem_wb_alu_result <= 32'b0;
@@ -686,6 +718,8 @@ module SCPU #(
             plic_enable <= 6'b111110;
             irq_drain <= 1'b0;
             irq_drain_cause <= 32'b0;
+            redirect_pending <= 1'b0;
+            redirect_pc <= 32'b0;
         end else begin
             software_irq_meta <= software_irq;
             software_irq_sync <= software_irq_meta;
@@ -739,10 +773,10 @@ module SCPU #(
                 endcase
             end
 
-            if (ex_exception) begin
-                csr_mepc <= id_ex_pc;
-                csr_mcause <= ex_exception_cause;
-                csr_mtval <= ex_exception_tval;
+            if (mem_exception) begin
+                csr_mepc <= ex_mem_pc;
+                csr_mcause <= ex_mem_exception_cause;
+                csr_mtval <= ex_mem_exception_tval;
                 csr_mstatus[7] <= csr_mstatus[3];
                 csr_mstatus[3] <= 1'b0;
                 irq_drain <= 1'b0;
@@ -764,56 +798,100 @@ module SCPU #(
                 irq_drain_cause <= active_irq_cause;
             end
 
-            mem_wb_valid <= ex_mem_valid;
+            if (redirect_request) begin
+                redirect_pending <= 1'b1;
+                redirect_pc <= redirect_request_pc;
+            end else if (redirect_pending) begin
+                redirect_pending <= 1'b0;
+            end
+
+            mem_wb_valid <= ex_mem_valid && !ex_mem_exception;
             mem_wb_alu_result <= ex_mem_alu_result;
             mem_wb_mem_data <= Data_in;
             mem_wb_pc4 <= ex_mem_pc4;
             mem_wb_csr_rdata <= ex_mem_csr_rdata;
             mem_wb_rd <= ex_mem_rd;
-            mem_wb_regwrite <= ex_mem_regwrite;
+            mem_wb_regwrite <= ex_mem_regwrite && !ex_mem_exception;
             mem_wb_wdsel <= ex_mem_wdsel;
-            mem_wb_csr_write <= ex_mem_csr_write;
+            mem_wb_csr_write <= ex_mem_csr_write && !ex_mem_exception;
             mem_wb_csr_cmd <= ex_mem_csr_cmd;
             mem_wb_csr_addr <= ex_mem_csr_addr;
             mem_wb_csr_wdata <= ex_mem_csr_wdata;
 
-            ex_mem_valid <= id_ex_valid && !ex_mret && !ex_exception;
+            ex_mem_valid <= kill_ex_to_mem ? 1'b0 : (id_ex_valid && !ex_mret);
             ex_mem_alu_result <= ex_result_to_mem;
             ex_mem_store_data <= ex_rs2_value;
             ex_mem_pc4 <= id_ex_pc4;
+            ex_mem_pc <= id_ex_pc;
             ex_mem_csr_rdata <= id_ex_csr_rdata;
             ex_mem_rd <= id_ex_rd;
-            ex_mem_regwrite <= id_ex_regwrite && !ex_mret && !ex_exception;
-            ex_mem_memwrite <= id_ex_memwrite && !ex_mret && !ex_exception;
-            ex_mem_memread <= id_ex_is_load && !ex_mret && !ex_exception;
+            ex_mem_regwrite <= id_ex_regwrite && !ex_mret;
+            ex_mem_memwrite <= id_ex_memwrite && !ex_mret;
+            ex_mem_memread <= id_ex_is_load && !ex_mret;
             ex_mem_wdsel <= id_ex_wdsel;
             ex_mem_dm_ctrl <= id_ex_dm_ctrl;
-            ex_mem_csr_write <= id_ex_csr_write && !ex_mret && !ex_exception;
+            ex_mem_csr_write <= id_ex_csr_write && !ex_mret;
             ex_mem_csr_cmd <= id_ex_csr_cmd;
             ex_mem_csr_addr <= id_ex_csr_addr;
             ex_mem_csr_wdata <= id_ex_csr_wdata;
+            ex_mem_exception <= kill_ex_to_mem ? 1'b0 : ex_exception;
+            ex_mem_exception_cause <= ex_exception_cause;
+            ex_mem_exception_tval <= ex_exception_tval;
 
-            if (ex_exception) begin
-                pc_if <= mtvec_direct;
-            end else if (irq_take_now) begin
-                pc_if <= mtvec_direct;
-            end else if (ex_mret) begin
-                pc_if <= csr_mepc;
-            end else if (ex_take_branch) begin
-                pc_if <= ex_branch_target;
-            end else if (irq_hold_fetch) begin
+            if (redirect_pending) begin
+                pc_if <= redirect_pc;
+            end else if (redirect_request) begin
+                pc_if <= pc_if;
+            end else if (irq_hold_fetch || data_hazard_stall) begin
                 pc_if <= pc_if;
             end else begin
                 pc_if <= pc_if + 32'd4;
             end
 
-            if (ex_exception || irq_take_now || ex_mret || ex_take_branch) begin
+            if (redirect_pending || redirect_request) begin
                 if_id_valid <= 1'b0;
                 if_id_pc <= 32'b0;
                 if_id_inst <= NOP;
                 if_id_inst_trap <= 1'b0;
                 if_id_inst_trap_cause <= 32'b0;
                 if_id_inst_trap_tval <= 32'b0;
+
+                id_ex_valid <= 1'b0;
+                id_ex_pc <= 32'b0;
+                id_ex_pc4 <= 32'b0;
+                id_ex_rd1 <= 32'b0;
+                id_ex_rd2 <= 32'b0;
+                id_ex_imm <= 32'b0;
+                id_ex_rs1 <= 5'b0;
+                id_ex_rs2 <= 5'b0;
+                id_ex_rd <= 5'b0;
+                id_ex_regwrite <= 1'b0;
+                id_ex_memwrite <= 1'b0;
+                id_ex_alusrc <= 1'b0;
+                id_ex_wdsel <= `WDSel_FromALU;
+                id_ex_aluop <= `ALUOp_nop;
+                id_ex_dm_ctrl <= `dm_word;
+                id_ex_is_branch <= 1'b0;
+                id_ex_is_jal <= 1'b0;
+                id_ex_is_jalr <= 1'b0;
+                id_ex_is_mret <= 1'b0;
+                id_ex_is_load <= 1'b0;
+                id_ex_is_store <= 1'b0;
+                id_ex_exception <= 1'b0;
+                id_ex_exception_cause <= 32'b0;
+                id_ex_exception_tval <= 32'b0;
+                id_ex_csr_write <= 1'b0;
+                id_ex_csr_cmd <= CSR_CMD_WRITE;
+                id_ex_csr_addr <= 12'b0;
+                id_ex_csr_wdata <= 32'b0;
+                id_ex_csr_rdata <= 32'b0;
+            end else if (data_hazard_stall && !irq_hold_fetch) begin
+                if_id_valid <= if_id_valid;
+                if_id_pc <= if_id_pc;
+                if_id_inst <= if_id_inst;
+                if_id_inst_trap <= if_id_inst_trap;
+                if_id_inst_trap_cause <= if_id_inst_trap_cause;
+                if_id_inst_trap_tval <= if_id_inst_trap_tval;
 
                 id_ex_valid <= 1'b0;
                 id_ex_pc <= 32'b0;

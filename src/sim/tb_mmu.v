@@ -222,9 +222,9 @@ module tb_mmu;
         end
 
         clear_imem();
-        imem[10'h000] = 32'h0000_106f; // jal x0, 0x1000
+        imem[10'h000] = 32'h0000_406f; // jal x0, 0x4000
         reset_cpu();
-        wait_trap(CAUSE_INST_PAGE_FAULT, 32'h0000_1000, 32'h0000_1000);
+        wait_trap(CAUSE_INST_PAGE_FAULT, 32'h0000_4000, 32'h0000_4000);
 
         clear_imem();
         imem[10'h000] = 32'h0000_10b7; // lui x1, 0x1

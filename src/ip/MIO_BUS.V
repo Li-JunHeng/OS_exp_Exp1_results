@@ -23,6 +23,7 @@ module MIO_BUS(
     input         ps2_overflow,
     input         ps2_frame_error,
     input         ps2_parity_error,
+    input  [31:0] vga_data_out,
     output [31:0] Cpu_data4bus,
     output [31:0] ram_data_in,
     output [9:0]  ram_addr,
@@ -32,15 +33,18 @@ module MIO_BUS(
     output        counter_we,
     output [31:0] Peripheral_in,
     output        ps2_rd_en,
-    output        ps2_clear_errors
+    output        ps2_clear_errors,
+    output        vga_we,
+    output        vga_re
 );
     wire gpioe_addr = (addr_bus == 32'he0000000);
     wire gpiof_addr = (addr_bus == 32'hf0000000);
     wire counter_addr = (addr_bus[31:4] == 28'hf000000) && !gpiof_addr;
     wire ps2_data_addr = (addr_bus == 32'hd0000000);
     wire ps2_status_addr = (addr_bus == 32'hd0000004);
+    wire vga_addr = (addr_bus[31:16] == 16'hc000);
     wire peripheral_addr = gpioe_addr || gpiof_addr || counter_addr ||
-                           ps2_data_addr || ps2_status_addr;
+                           ps2_data_addr || ps2_status_addr || vga_addr;
     wire [31:0] ps2_status = {20'b0, ps2_data_count, 3'b000, ps2_parity_error,
                               ps2_frame_error, ps2_overflow, ps2_fifo_full,
                               ps2_data_valid};
@@ -55,8 +59,11 @@ module MIO_BUS(
     assign Peripheral_in = Cpu_data2bus;
     assign ps2_rd_en = mem_r && ps2_data_addr;
     assign ps2_clear_errors = mem_w && ps2_status_addr;
+    assign vga_we = mem_w && vga_addr;
+    assign vga_re = mem_r && vga_addr;
 
     assign Cpu_data4bus =
+        vga_addr ? vga_data_out :
         gpioe_addr ? {11'b0, counter2_out, counter1_out, counter0_out, BTN, SW} :
         gpiof_addr ? {16'b0, led_out} :
         counter_addr ? counter_out :

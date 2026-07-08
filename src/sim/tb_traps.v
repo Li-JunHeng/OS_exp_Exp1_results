@@ -156,9 +156,9 @@ module tb_traps;
         wait_trap(CAUSE_ECALL_M, 32'h0000_0000, 32'h0000_0000, 1'b1, 1'b1);
 
         clear_imem();
-        imem[10'h000] = 32'h0000_106f; // jal x0, 0x1000
+        imem[10'h000] = 32'h0000_406f; // jal x0, 0x4000
         reset_cpu();
-        wait_trap(CAUSE_INST_ACCESS_FAULT, 32'h0000_1000, 32'h0000_1000, 1'b1, 1'b1);
+        wait_trap(CAUSE_INST_ACCESS_FAULT, 32'h0000_4000, 32'h0000_4000, 1'b1, 1'b1);
 
         clear_imem();
         imem[10'h000] = 32'h1000_00b7; // lui x1, 0x10000

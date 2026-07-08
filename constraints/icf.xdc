@@ -6,6 +6,22 @@ set_property -dict { PACKAGE_PIN C12   IOSTANDARD LVCMOS33 } [get_ports { rstn }
 ## PS/2 keyboard
 set_property -dict { PACKAGE_PIN F4    IOSTANDARD LVCMOS33 PULLUP true } [get_ports { ps2_clk }];  #Sch=ps2_clk
 set_property -dict { PACKAGE_PIN B2    IOSTANDARD LVCMOS33 PULLUP true } [get_ports { ps2_data }]; #Sch=ps2_data
+
+## VGA connector
+set_property -dict { PACKAGE_PIN A3    IOSTANDARD LVCMOS33 } [get_ports { vga_red[0] }];   #Sch=vga_r[0]
+set_property -dict { PACKAGE_PIN B4    IOSTANDARD LVCMOS33 } [get_ports { vga_red[1] }];   #Sch=vga_r[1]
+set_property -dict { PACKAGE_PIN C5    IOSTANDARD LVCMOS33 } [get_ports { vga_red[2] }];   #Sch=vga_r[2]
+set_property -dict { PACKAGE_PIN A4    IOSTANDARD LVCMOS33 } [get_ports { vga_red[3] }];   #Sch=vga_r[3]
+set_property -dict { PACKAGE_PIN C6    IOSTANDARD LVCMOS33 } [get_ports { vga_green[0] }]; #Sch=vga_g[0]
+set_property -dict { PACKAGE_PIN A5    IOSTANDARD LVCMOS33 } [get_ports { vga_green[1] }]; #Sch=vga_g[1]
+set_property -dict { PACKAGE_PIN B6    IOSTANDARD LVCMOS33 } [get_ports { vga_green[2] }]; #Sch=vga_g[2]
+set_property -dict { PACKAGE_PIN A6    IOSTANDARD LVCMOS33 } [get_ports { vga_green[3] }]; #Sch=vga_g[3]
+set_property -dict { PACKAGE_PIN B7    IOSTANDARD LVCMOS33 } [get_ports { vga_blue[0] }];  #Sch=vga_b[0]
+set_property -dict { PACKAGE_PIN C7    IOSTANDARD LVCMOS33 } [get_ports { vga_blue[1] }];  #Sch=vga_b[1]
+set_property -dict { PACKAGE_PIN D7    IOSTANDARD LVCMOS33 } [get_ports { vga_blue[2] }];  #Sch=vga_b[2]
+set_property -dict { PACKAGE_PIN D8    IOSTANDARD LVCMOS33 } [get_ports { vga_blue[3] }];  #Sch=vga_b[3]
+set_property -dict { PACKAGE_PIN B11   IOSTANDARD LVCMOS33 } [get_ports { vga_hsync }];    #Sch=vga_hs
+set_property -dict { PACKAGE_PIN B12   IOSTANDARD LVCMOS33 } [get_ports { vga_vsync }];    #Sch=vga_vs
 # 7seg
 set_property -dict { PACKAGE_PIN T10   IOSTANDARD LVCMOS33 } [get_ports { disp_seg_o[0] }]; #IO_L24N_T3_A00_D16_14 Sch=ca
 set_property -dict { PACKAGE_PIN R10   IOSTANDARD LVCMOS33 } [get_ports { disp_seg_o[1] }]; #IO_25_14 Sch=cb

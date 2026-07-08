@@ -34,6 +34,7 @@ set source_files {
     src/board/top.v
     src/board/seg_display.v
     src/board/vga_hex_display.v
+    src/board/vga_tile_sprite_display.v
     src/board/data_ram.v
     src/cpu/ctrl_encode_def.v
     src/cpu/alu.v
@@ -88,6 +89,11 @@ set_property include_dirs [list [file normalize [file join $results_dir src cpu]
 
 set prep_script [file normalize [file join $script_dir prepare_run_memory.tcl]]
 set_property STEPS.SYNTH_DESIGN.TCL.PRE $prep_script [get_runs synth_1]
+set_property STEPS.OPT_DESIGN.ARGS.DIRECTIVE Explore [get_runs impl_1]
+set_property STEPS.PLACE_DESIGN.ARGS.DIRECTIVE Explore [get_runs impl_1]
+set_property STEPS.PHYS_OPT_DESIGN.IS_ENABLED true [get_runs impl_1]
+set_property STEPS.PHYS_OPT_DESIGN.ARGS.DIRECTIVE Explore [get_runs impl_1]
+set_property STEPS.ROUTE_DESIGN.ARGS.DIRECTIVE Explore [get_runs impl_1]
 
 update_compile_order -fileset sources_1
 

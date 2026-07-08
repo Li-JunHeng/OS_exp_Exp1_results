@@ -45,6 +45,14 @@ If you prefer Vivado GUI:
 - `memory/testac.dat` and `memory/D_mem.dat` are copied into the synthesis run directory so Vivado can resolve `$readmemh("memory/...")`.
 - Generated `.bit`, `.rpt`, `.jou`, and `.log` files are ignored by default. Commit them only if the submission explicitly requires generated artifacts.
 
+## VGA Rogue-lite Demo
+
+- The board top now exposes the physical Nexys A7 VGA connector as `vga_red[3:0]`, `vga_green[3:0]`, `vga_blue[3:0]`, `vga_hsync`, and `vga_vsync`. The design outputs 640x480 timing and lets an external 1080p monitor scale it.
+- The CPU runs directly from the 100 MHz board clock (`clk_cpu = clk`). Post-route timing for the generated bitstream met the 100 MHz constraint with WNS 0.482 ns.
+- `src/board/vga_tile_sprite_display.v` provides a 320x240 logical Tile+Sprite renderer scaled 2x to VGA. VGA MMIO lives at `0xc0000000`: control/status, 20x15 tilemap, 32 sprites, and 16 palette entries.
+- `firmware/build.ps1` builds the game firmware through `C -> asm -> ELF -> DAT`, using `riscv64-unknown-elf-gcc` from PATH or the PlatformIO fallback toolchain. It writes `memory/testac.dat` and `memory/D_mem.dat`.
+- The game firmware uses PS/2 keyboard interrupts through the existing PLIC keyboard source (`id=5`) and VBlank as the machine timer interrupt source.
+
 ## CPU Interrupt Support
 
 - `SCPU` has separate machine software, timer, generic external, UART, GPIO, SPI, I2C, and PS/2 keyboard interrupt inputs. The board top maps software interrupt to switch 14, timer interrupt to counter channel 0, UART to switch 13, GPIO to switch 15, SPI to counter channel 1, I2C to counter channel 2, and keyboard interrupt to the PS/2 receiver FIFO-not-empty signal.
